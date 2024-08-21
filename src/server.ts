@@ -12,8 +12,11 @@ import { StatusCodes } from 'http-status-codes';
 import { config } from '@gateway/config';
 import { elasticSearch } from '@gateway/elasticsearch';
 import { appRoutes } from '@gateway/routes';
+import { axiosAuthInstance } from '@gateway/services/api/auth.service';
+import { isAxiosError } from 'axios';
 
 const SERVER_PORT = 4000;
+const DEFAULT_ERROR_CODE = 500;
 const log = winstonLogger(`${config.ELASTIC_SEARCH_URL}`, 'apiGatewayServer', 'debug');
 
 export class GatewayServer {
@@ -61,6 +64,12 @@ export class GatewayServer {
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
       })
     );
+    app.use((req: Request, _res: Response, next: NextFunction) => {
+      if (req.session?.jwt) {
+        axiosAuthInstance.defaults.headers['Authorization'] = `Bearer ${req.session?.jwt}`;
+      }
+      next();
+    });
   }
 
   private standardMiddleware(app: Application): void {
@@ -85,10 +94,9 @@ export class GatewayServer {
   private errorHandler(app: Application): void {
     app.use('*', (req: Request, res: Response, next: NextFunction) => {
       const fullUrl = `${req.protocol}://${req.get('host')}${req.originalUrl}`;
-
       log.log('error', `${fullUrl} endpoint does not exist.`, '');
 
-      res.status(StatusCodes.NOT_FOUND).json({ message: 'The endpoint called does not exist' });
+      res.status(StatusCodes.NOT_FOUND).json({ message: 'The endpoint called does not exist.' });
 
       next();
     });
@@ -97,6 +105,13 @@ export class GatewayServer {
       if (error instanceof CustomError) {
         log.log('error', `GatewayService ${error.comingFrom}:`, error);
         res.status(error.statusCode).json(error.serializeErrors());
+      }
+
+      if (isAxiosError(error)) {
+        log.log('error', `GatewayService Axios Error - ${error?.response?.data?.comingFrom}:`, error);
+        res
+          .status(error?.response?.data?.statusCode ?? DEFAULT_ERROR_CODE)
+          .json({ message: error?.response?.data?.message ?? 'Error occurred.' });
       }
 
       next();
