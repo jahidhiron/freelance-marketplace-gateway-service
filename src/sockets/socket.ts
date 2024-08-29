@@ -1,11 +1,11 @@
-// import { config } from '@gateway/config';
+import { config } from '@gateway/config';
 import { GatewayCache } from '@gateway/redis/gateway.cache';
-// import { winstonLogger } from '@jahidhiron/jobber-shared';
+import { IMessageDocument, winstonLogger } from '@jahidhiron/jobber-shared';
 import { Server, Socket } from 'socket.io';
-// import { io, Socket as SocketClient } from 'socket.io-client';
+import { io, Socket as SocketClient } from 'socket.io-client';
 
-// const log = winstonLogger(`${config.ELASTIC_SEARCH_URL}`, 'gatewaySocket', 'debug');
-// let chatSocketClient: SocketClient;
+const log = winstonLogger(`${config.ELASTIC_SEARCH_URL}`, 'gatewaySocket', 'debug');
+let chatSocketClient: SocketClient;
 // let orderSocketClient: SocketClient;
 
 export class SocketIOAppHandler {
@@ -15,12 +15,15 @@ export class SocketIOAppHandler {
   constructor(io: Server) {
     this.io = io;
     this.gatewayCache = new GatewayCache();
-    // this.chatSocketServiceIOConnections();
+    // when create instance then try to connect with socket
+    this.chatSocketServiceIOConnections();
     // this.orderSocketServiceIOConnections();
   }
 
   public listen(): void {
-    // this.chatSocketServiceIOConnections();
+    // this gateway server is acting as a client in terms of chat service
+    // when restart the chat server then again try to connect with socket
+    this.chatSocketServiceIOConnections();
     // this.orderSocketServiceIOConnections();
     this.io.on('connection', async (socket: Socket) => {
       socket.on('getLoggedInUsers', async () => {
@@ -44,35 +47,35 @@ export class SocketIOAppHandler {
     });
   }
 
-  // private chatSocketServiceIOConnections(): void {
-  //   chatSocketClient = io(`${config.MESSAGE_BASE_URL}`, {
-  //     transports: ['websocket', 'polling'],
-  //     secure: true
-  //   });
+  private chatSocketServiceIOConnections(): void {
+    chatSocketClient = io(`${config.MESSAGE_BASE_URL}`, {
+      transports: ['websocket', 'polling'],
+      secure: true
+    });
 
-  //   chatSocketClient.on('connect', () => {
-  //     log.info('ChatService socket connected');
-  //   });
+    chatSocketClient.on('connect', () => {
+      log.info('ChatService socket connected');
+    });
 
-  //   chatSocketClient.on('disconnect', (reason: SocketClient.DisconnectReason) => {
-  //     log.log('error', 'ChatSocket disconnect reason:', reason);
-  //     chatSocketClient.connect();
-  //   });
+    chatSocketClient.on('disconnect', (reason: SocketClient.DisconnectReason) => {
+      log.log('error', 'ChatSocket disconnect reason:', reason);
+      chatSocketClient.connect();
+    });
 
-  //   chatSocketClient.on('connect_error', (error: Error) => {
-  //     log.log('error', 'ChatService socket connection error:', error);
-  //     chatSocketClient.connect();
-  //   });
+    chatSocketClient.on('connect_error', (error: Error) => {
+      log.log('error', 'ChatService socket connection error:', error);
+      chatSocketClient.connect();
+    });
 
-  //   // custom events
-  //   chatSocketClient.on('message received', (data: IMessageDocument) => {
-  //     this.io.emit('message received', data);
-  //   });
+    // custom events
+    chatSocketClient.on('message received', (data: IMessageDocument) => {
+      this.io.emit('message received', data);
+    });
 
-  //   chatSocketClient.on('message updated', (data: IMessageDocument) => {
-  //     this.io.emit('message updated', data);
-  //   });
-  // }
+    chatSocketClient.on('message updated', (data: IMessageDocument) => {
+      this.io.emit('message updated', data);
+    });
+  }
 
   // private orderSocketServiceIOConnections(): void {
   //   orderSocketClient = io(`${config.ORDER_BASE_URL}`, {
